@@ -97,8 +97,8 @@ fun LauncherScreen(
     ) {
         // 1. Full-screen Wallpaper
         Image(
-            painter = painterResource(id = R.drawable.img_default_wallpaper_1789117027459),
-            contentDescription = "Wallpaper",
+            painter = painterResource(id = state.preferences.selectedWallpaper.drawableRes),
+            contentDescription = state.preferences.selectedWallpaper.title,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
@@ -269,6 +269,7 @@ fun LauncherScreen(
                 viewModel.addFavorite(app)
                 viewModel.closeAppDrawer()
             },
+            onOpenSettings = { viewModel.openCustomization() },
             onDismiss = { viewModel.closeAppDrawer() }
         )
 

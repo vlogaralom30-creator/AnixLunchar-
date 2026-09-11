@@ -18,7 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -32,14 +33,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,18 +72,41 @@ fun FavoritesVerticalList(
         }
     }
 
+    // Smoothly animate fisheye intensity:
+    // When idle (not scrolling) -> 0f (all items uniform 1.0 standard size 1111)
+    // When scrolling -> 1f (dynamic 1, 2, 3, 4, 3, 2, 1 magnifying lens effect)
+    val scrollIntensity by animateFloatAsState(
+        targetValue = if (listState.isScrollInProgress) 1f else 0f,
+        animationSpec = if (listState.isScrollInProgress) {
+            tween(durationMillis = 180, easing = FastOutSlowInEasing)
+        } else {
+            tween(durationMillis = 350, easing = FastOutSlowInEasing)
+        },
+        label = "fisheye_scroll_intensity"
+    )
+
+    // Generous top/bottom padding ensures that top and bottom items can both scroll directly into center focus
+    val verticalPadding = if (preferences.enableFisheyeScroll) {
+        PaddingValues(top = 140.dp, bottom = 180.dp)
+    } else {
+        PaddingValues(top = 16.dp, bottom = 80.dp)
+    }
+
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(0.72f),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
+        contentPadding = verticalPadding,
         verticalArrangement = Arrangement.spacedBy(preferences.itemSpacingDp.dp)
     ) {
-        items(
+        itemsIndexed(
             items = apps,
-            key = { it.packageName }
-        ) { app ->
+            key = { _, app -> app.packageName }
+        ) { index, app ->
             FavoriteAppItem(
                 app = app,
+                index = index,
+                listState = listState,
+                scrollIntensity = scrollIntensity,
                 preferences = preferences,
                 onClick = {
                     if (preferences.enableClickSound) {
@@ -106,6 +129,9 @@ fun FavoritesVerticalList(
 @Composable
 fun FavoriteAppItem(
     app: InstalledApp,
+    index: Int,
+    listState: LazyListState,
+    scrollIntensity: Float = 0f,
     preferences: LauncherPreferences,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -115,14 +141,14 @@ fun FavoriteAppItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Smooth fluid tactile spring scale when tapped
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
+    // Tactile bounce when pressed
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
-        label = "item_scale"
+        label = "item_press_scale"
     )
 
     val launchAnimScale = remember { Animatable(1f) }
@@ -139,11 +165,57 @@ fun FavoriteAppItem(
         shape = RoundedCornerShape(12.dp),
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
             .graphicsLayer {
-                scaleX = launchAnimScale.value
-                scaleY = launchAnimScale.value
-                alpha = launchAnimAlpha.value
+                // Anchor on left edge so item expands outwards to the right and vertically from center
+                transformOrigin = TransformOrigin(0f, 0.5f)
+
+                var dynamicScale = 1f
+                var dynamicAlpha = 1f
+                var dynamicTranslationX = 0f
+
+                if (preferences.enableFisheyeScroll && scrollIntensity > 0.001f) {
+                    val itemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                    val viewportHeight = listState.layoutInfo.viewportSize.height.toFloat()
+
+                    if (itemInfo != null && viewportHeight > 0f) {
+                        val viewportCenter = viewportHeight / 2f
+                        val itemCenter = itemInfo.offset + (itemInfo.size / 2f)
+                        val distanceFromCenter = kotlin.math.abs(viewportCenter - itemCenter)
+                        val maxDistance = (viewportHeight / 2f).coerceAtLeast(1f)
+                        val normalizedDistance = (distanceFromCenter / maxDistance).coerceIn(0f, 1f)
+
+                        // Cosine lens curve:
+                        // Center distance 0 -> curveFactor 1.0 (Maximum magnification)
+                        // Edge distance 1 -> curveFactor 0.0 (Minimum scale)
+                        // Resulting curve: 1, 2, 3, 4, 3, 2, 1
+                        // _ (top: small)
+                        // __ (mid: medium)
+                        // ___ (center: BIG)
+                        // __ (mid: medium)
+                        // _ (bottom: small)
+                        val curveFactor = (kotlin.math.cos(normalizedDistance * Math.PI.toFloat()) + 1f) / 2f
+
+                        val minScale = 0.70f
+                        val maxScale = preferences.fisheyeMagnification
+                        val targetScale = minScale + (maxScale - minScale) * curveFactor
+
+                        // Alpha curve: 0.50f at extremes to 1.0f in center focus
+                        val targetAlpha = 0.50f + (0.50f * curveFactor)
+
+                        // Smooth horizontal wheel/lens arc to the right
+                        val targetTranslationX = curveFactor * 22f
+
+                        // Blend between resting standard (1, 1, 1, 1) and active scrolling (1, 2, 3, 4, 3, 2, 1)
+                        dynamicScale = 1f + (targetScale - 1f) * scrollIntensity
+                        dynamicAlpha = 1f + (targetAlpha - 1f) * scrollIntensity
+                        dynamicTranslationX = targetTranslationX * scrollIntensity
+                    }
+                }
+
+                scaleX = dynamicScale * pressScale * launchAnimScale.value
+                scaleY = dynamicScale * pressScale * launchAnimScale.value
+                alpha = dynamicAlpha * launchAnimAlpha.value
+                translationX = dynamicTranslationX
             }
             .combinedClickable(
                 interactionSource = interactionSource,

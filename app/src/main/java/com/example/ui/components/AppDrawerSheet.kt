@@ -30,13 +30,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +75,7 @@ fun AppDrawerSheet(
     onSearchQueryChange: (String) -> Unit,
     onAppClick: (InstalledApp) -> Unit,
     onAppLongClick: (InstalledApp) -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     AnimatedVisibility(
@@ -156,7 +160,26 @@ fun AppDrawerSheet(
                         )
                     )
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (onOpenSettings != null) {
+                        IconButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenSettings()
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color(0x22FFFFFF), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Launcher Settings",
+                                tint = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
 
                     IconButton(
                         onClick = onDismiss,
@@ -174,20 +197,36 @@ fun AppDrawerSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val gridState = rememberLazyGridState()
+
+                val scrollIntensity by animateFloatAsState(
+                    targetValue = if (gridState.isScrollInProgress) 1f else 0f,
+                    animationSpec = if (gridState.isScrollInProgress) {
+                        tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                    } else {
+                        tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                    },
+                    label = "drawer_grid_scroll_intensity"
+                )
+
                 // App Grid (4 columns)
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Fixed(4),
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(
+                    itemsIndexed(
                         items = apps,
-                        key = { it.packageName }
-                    ) { app ->
+                        key = { _, app -> app.packageName }
+                    ) { index, app ->
                         DrawerGridAppItem(
                             app = app,
+                            index = index,
+                            gridState = gridState,
+                            scrollIntensity = scrollIntensity,
                             preferences = preferences,
                             onClick = { onAppClick(app) },
                             onLongClick = { onAppLongClick(app) }
@@ -202,6 +241,9 @@ fun AppDrawerSheet(
 @Composable
 fun DrawerGridAppItem(
     app: InstalledApp,
+    index: Int = 0,
+    gridState: LazyGridState? = null,
+    scrollIntensity: Float = 0f,
     preferences: LauncherPreferences? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -226,11 +268,36 @@ fun DrawerGridAppItem(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .scale(scale)
             .graphicsLayer {
-                scaleX = launchAnimScale.value
-                scaleY = launchAnimScale.value
-                alpha = launchAnimAlpha.value
+                var dynamicScale = 1f
+                var dynamicAlpha = 1f
+
+                if (preferences?.enableFisheyeScroll == true && gridState != null && scrollIntensity > 0.001f) {
+                    val itemInfo = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                    val viewportHeight = gridState.layoutInfo.viewportSize.height.toFloat()
+
+                    if (itemInfo != null && viewportHeight > 0f) {
+                        val viewportCenter = viewportHeight / 2f
+                        val itemCenter = itemInfo.offset.y + (itemInfo.size.height / 2f)
+                        val distanceFromCenter = kotlin.math.abs(viewportCenter - itemCenter)
+                        val maxDistance = (viewportHeight / 2f).coerceAtLeast(1f)
+                        val normalizedDistance = (distanceFromCenter / maxDistance).coerceIn(0f, 1f)
+                        val curveFactor = (kotlin.math.cos(normalizedDistance * Math.PI.toFloat()) + 1f) / 2f
+
+                        val minScale = 0.82f
+                        val maxScale = 1.15f
+                        val targetScale = minScale + (maxScale - minScale) * curveFactor
+                        val targetAlpha = 0.60f + (0.40f * curveFactor)
+
+                        // Blend between resting (1.0f) and active scroll magnification
+                        dynamicScale = 1f + (targetScale - 1f) * scrollIntensity
+                        dynamicAlpha = 1f + (targetAlpha - 1f) * scrollIntensity
+                    }
+                }
+
+                scaleX = dynamicScale * scale * launchAnimScale.value
+                scaleY = dynamicScale * scale * launchAnimScale.value
+                alpha = dynamicAlpha * launchAnimAlpha.value
             }
             .clickable(
                 interactionSource = interactionSource,

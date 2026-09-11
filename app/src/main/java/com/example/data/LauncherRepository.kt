@@ -12,6 +12,7 @@ import android.util.Log
 import com.example.model.ClockPosition
 import com.example.model.InstalledApp
 import com.example.model.LauncherPreferences
+import com.example.model.LauncherWallpaper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Collections
@@ -37,6 +38,9 @@ class LauncherRepository(private val context: Context) {
         private const val KEY_THEMED_ICONS = "pref_themed_icons"
         private const val KEY_THEMED_ICON_COLOR = "pref_themed_icon_color"
         private const val KEY_THEMED_ICON_STYLE = "pref_themed_icon_style"
+        private const val KEY_FISHEYE_SCROLL = "pref_fisheye_scroll"
+        private const val KEY_FISHEYE_MAG = "pref_fisheye_mag"
+        private const val KEY_WALLPAPER_ID = "pref_wallpaper_id"
         private const val TAG = "NXVLauncherRepo"
     }
 
@@ -207,6 +211,7 @@ class LauncherRepository(private val context: Context) {
         }
 
         return LauncherPreferences(
+            selectedWallpaperId = prefs.getString(KEY_WALLPAPER_ID, LauncherWallpaper.DEFAULT.id) ?: LauncherWallpaper.DEFAULT.id,
             iconSizeDp = prefs.getInt(KEY_ICON_SIZE, 44),
             showAppNames = prefs.getBoolean(KEY_SHOW_NAMES, true),
             itemSpacingDp = prefs.getInt(KEY_ITEM_SPACING, 18),
@@ -220,12 +225,15 @@ class LauncherRepository(private val context: Context) {
             enableClickSound = prefs.getBoolean(KEY_ENABLE_SOUND, true),
             themedIcons = prefs.getBoolean(KEY_THEMED_ICONS, true),
             themedIconColor = themedColor,
-            themedIconStyle = themedStyle
+            themedIconStyle = themedStyle,
+            enableFisheyeScroll = prefs.getBoolean(KEY_FISHEYE_SCROLL, true),
+            fisheyeMagnification = prefs.getFloat(KEY_FISHEYE_MAG, 1.35f)
         )
     }
 
     fun savePreferences(p: LauncherPreferences) {
         prefs.edit()
+            .putString(KEY_WALLPAPER_ID, p.selectedWallpaperId)
             .putInt(KEY_ICON_SIZE, p.iconSizeDp)
             .putBoolean(KEY_SHOW_NAMES, p.showAppNames)
             .putInt(KEY_ITEM_SPACING, p.itemSpacingDp)
@@ -240,6 +248,8 @@ class LauncherRepository(private val context: Context) {
             .putBoolean(KEY_THEMED_ICONS, p.themedIcons)
             .putString(KEY_THEMED_ICON_COLOR, p.themedIconColor.name)
             .putString(KEY_THEMED_ICON_STYLE, p.themedIconStyle.name)
+            .putBoolean(KEY_FISHEYE_SCROLL, p.enableFisheyeScroll)
+            .putFloat(KEY_FISHEYE_MAG, p.fisheyeMagnification)
             .apply()
     }
 }
