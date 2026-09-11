@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,14 +33,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Handles Android Home Button & Gesture Home navigation when user returns to NXV Launcher.
+     * Brings user back to the primary Launcher Home and closes any open overlays seamlessly.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        launcherViewModel.closeAllOverlays()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        launcherViewModel.updateDateTime()
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // When user taps Back on launcher: close any open sheet or drawer first
+        // Safe fallback for legacy back dispatch: priority close overlays, stay on Launcher Home
         val state = launcherViewModel.uiState.value
-        if (state.isAppDrawerOpen || state.isSearchOpen || state.isCustomizationOpen || state.isAppActionMenuOpen) {
+        if (state.isAppActionMenuOpen || state.isCustomizationOpen || state.isSearchOpen || state.isAppDrawerOpen || state.currentPage != 0) {
             launcherViewModel.closeAllOverlays()
         } else {
-            // Stay on home screen (standard launcher behavior)
+            // Stay on home screen (standard launcher behavior, do not finish activity)
         }
     }
 }

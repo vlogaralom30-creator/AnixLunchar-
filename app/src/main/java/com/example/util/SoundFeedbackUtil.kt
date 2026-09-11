@@ -10,18 +10,21 @@ import android.os.VibratorManager
 object SoundFeedbackUtil {
 
     /**
-     * Plays the native Android click sound effect and produces crisp mechanical haptic feedback.
+     * Plays the standard system UI click sound effect.
      */
-    fun playClickSoundAndHaptic(context: Context) {
-        // 1. Play the standard system UI click sound effect
+    fun playClickSound(context: Context) {
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.9f)
         } catch (e: Exception) {
             // Audio fallback safety
         }
+    }
 
-        // 2. Play tactile mechanical click vibration
+    /**
+     * Plays tactile mechanical click vibration.
+     */
+    fun playClickHaptic(context: Context) {
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -45,16 +48,41 @@ object SoundFeedbackUtil {
     }
 
     /**
-     * Subtle tick sound and haptic when scrolling through items in the launcher.
+     * Plays click feedback based on individual sound and haptic preferences.
      */
-    fun playScrollTick(context: Context) {
+    fun playClickFeedback(context: Context, enableSound: Boolean, enableHaptic: Boolean) {
+        if (enableSound) {
+            playClickSound(context)
+        }
+        if (enableHaptic) {
+            playClickHaptic(context)
+        }
+    }
+
+    /**
+     * Legacy helper for click sound & haptic.
+     */
+    fun playClickSoundAndHaptic(context: Context) {
+        playClickSound(context)
+        playClickHaptic(context)
+    }
+
+    /**
+     * Subtle tick sound when scrolling through items in the launcher.
+     */
+    fun playScrollTickSound(context: Context) {
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            audioManager?.playSoundEffect(AudioManager.FX_KEYPRESS_STANDARD, 0.4f)
+            audioManager?.playSoundEffect(AudioManager.FX_KEYPRESS_STANDARD, 0.35f)
         } catch (e: Exception) {
             // Audio fallback safety
         }
+    }
 
+    /**
+     * Subtle tick vibration when scrolling through items in the launcher.
+     */
+    fun playScrollTickHaptic(context: Context) {
         try {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -76,4 +104,25 @@ object SoundFeedbackUtil {
             // Fallback
         }
     }
+
+    /**
+     * Plays scroll tick feedback based on individual sound and haptic preferences.
+     */
+    fun playScrollTickFeedback(context: Context, enableSound: Boolean, enableHaptic: Boolean) {
+        if (enableSound) {
+            playScrollTickSound(context)
+        }
+        if (enableHaptic) {
+            playScrollTickHaptic(context)
+        }
+    }
+
+    /**
+     * Legacy scroll tick helper.
+     */
+    fun playScrollTick(context: Context) {
+        playScrollTickSound(context)
+        playScrollTickHaptic(context)
+    }
 }
+

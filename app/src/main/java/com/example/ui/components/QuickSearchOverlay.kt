@@ -53,12 +53,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.InstalledApp
 import com.example.model.LauncherPreferences
+import com.example.util.SoundFeedbackUtil
 import kotlinx.coroutines.launch
 
 @Composable
@@ -100,7 +102,7 @@ fun QuickSearchOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xF20D1311))
+                .background(Color(0xFF0D1311))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -212,6 +214,7 @@ fun SearchResultItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -240,6 +243,9 @@ fun SearchResultItem(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = {
+                    if (preferences != null) {
+                        SoundFeedbackUtil.playClickFeedback(context, preferences.enableSound, preferences.enableHaptic)
+                    }
                     coroutineScope.launch {
                         launchAnimScale.animateTo(
                             1.15f,
@@ -264,7 +270,7 @@ fun SearchResultItem(
                 contentDescription = app.label,
                 packageName = app.packageName,
                 themed = preferences?.themedIcons ?: false,
-                themeColor = if (preferences != null) Color(preferences.themedIconColor.colorHex) else Color(0xFF141918),
+                themeColor = if (preferences != null) Color(preferences.effectiveThemedIconColorHex) else Color(0xFF141918),
                 iconStyle = preferences?.themedIconStyle ?: com.example.model.ThemedIconStyle.SMART_MINIMAL,
                 size = 42.dp
             )
