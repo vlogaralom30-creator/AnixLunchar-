@@ -13,7 +13,6 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
 
     steps:
       - name: Checkout repository
@@ -24,20 +23,23 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Ensure .env exists
         run: |
-          if [ ! -f ".env" ]; then
-            touch .env
-            echo "Created empty .env file"
-          fi
+          touch .env
+          echo "Checked .env"
 
       - name: Decode Debug Keystore
         run: |
           if [ -f "debug.keystore.base64" ]; then
             base64 -d debug.keystore.base64 > debug.keystore
             echo "Successfully decoded debug.keystore"
+          else
+            echo "Generating fallback debug.keystore"
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Setup Gradle
