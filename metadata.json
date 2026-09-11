@@ -1,0 +1,6 @@
+{
+  "name": "NXV Launcher",
+  "description": "Minimal, clean, wallpaper-first Android launcher featuring vertical favorites dock, digital clock, live weather indicator, gesture search, and app drawer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
